@@ -35,87 +35,65 @@
     </div>
     <div class="container" id="scroll-cont">
         <div id="list"></div>
-        <div style="display:flex; justify-content:space-between; margin-top:10px;">
-            <button onclick="changePage(-1)">上一頁</button>
-            <div id="page-info">第 1 頁</div>
-            <button onclick="changePage(1)">下一頁</button>
-        </div>
     </div>
-    <script src="questions.js"></script>
+    <script src="questions.js" charset="UTF-8"></script>
     <script>
-        let filtered = [], page = 1;
-        function getQ() { return allQuestions.filter(q => q.id !== "序號" && q.id !== "題號" && q.id); }
+        let filtered = [];
+        function getQ() { return allQuestions.filter(q => q.id && q.id !== "序號" && q.id !== "題號"); }
 
         function render() {
             const list = document.getElementById('list');
-            list.innerHTML = filtered.slice((page - 1) * 50, page * 50).map(q => `
+            list.innerHTML = filtered.map(q => `
                 <div class="quiz-card" onclick="saveAndShow(this, '${q.id}')">
                     <div style="font-weight:bold; margin-bottom:8px;">No.${q.id} ${q.title}</div>
-                    <div class="option-line ${q.ans==='A' ? 'is-correct' : ''}">A. ${q.a}</div>
-                    <div class="option-line ${q.ans==='B' ? 'is-correct' : ''}">B. ${q.b}</div>
-                    <div class="option-line ${q.ans==='C' ? 'is-correct' : ''}">C. ${q.c}</div>
-                    <div class="option-line ${q.ans==='D' ? 'is-correct' : ''}">D. ${q.d}</div>
+                    <div class="option-line ${q.ans==='A' ? 'is-correct' : ''}">${q.a}</div>
+                    <div class="option-line ${q.ans==='B' ? 'is-correct' : ''}">${q.b}</div>
+                    <div class="option-line ${q.ans==='C' ? 'is-correct' : ''}">${q.c}</div>
+                    <div class="option-line ${q.ans==='D' ? 'is-correct' : ''}">${q.d}</div>
                 </div>
             `).join('');
-            document.getElementById('page-info').textContent = `第 ${page} 頁`;
         }
 
-        function saveAndShow(el, id) {
-            el.classList.toggle('show-ans');
-            localStorage.setItem('last_watched_id', id);
-        }
-
+        function saveAndShow(el, id) { el.classList.toggle('show-ans'); localStorage.setItem('last_watched_id', id); }
         function changeFilter() {
             const val = document.getElementById('course-select').value;
             filtered = (val === 'all') ? getQ() : getQ().filter(q => q.course === val);
-            page = 1; render();
-        }
-
-        function toggleAll() {
-            document.querySelectorAll('.quiz-card').forEach(c => c.classList.toggle('show-ans'));
-        }
-
-        function changePage(d) {
-            page = Math.max(1, Math.min(page + d, Math.ceil(filtered.length/50) || 1)); 
             render();
         }
-
+        function toggleAll() { document.querySelectorAll('.quiz-card').forEach(c => c.classList.toggle('show-ans')); }
         function loadSaved() {
             const lastId = localStorage.getItem('last_watched_id');
             const data = getQ();
-            const idx = data.findIndex(q => String(q.id) === lastId);
-            if(idx > -1) {
-                const target = data[idx];
-                // 1. 強制切換到該題所屬分類
+            const target = data.find(q => String(q.id) === lastId);
+            if(target) {
                 document.getElementById('course-select').value = target.course;
-                // 2. 依照分類重新篩選，但計算頁數時針對全部題目
-                filtered = getQ().filter(q => q.course === target.course);
-                page = Math.floor(data.findIndex(q => q.id === lastId) / 50) + 1; // 修正：這行確保頁數正確
-                // 更正：續讀應顯示該題所在課程的頁面
-                const courseIdx = filtered.findIndex(q => q.id === lastId);
-                page = Math.floor(courseIdx / 50) + 1;
-                render();
+                changeFilter();
+                setTimeout(() => {
+                    const el = Array.from(document.querySelectorAll('.quiz-card')).find(c => c.innerHTML.includes('No.'+lastId));
+                    if(el) el.scrollIntoView({ behavior: 'smooth' });
+                }, 200);
             }
         }
-
         function jumpToId() {
             const id = document.getElementById('search-input').value.trim();
-            const idx = filtered.findIndex(q => String(q.id) === id);
-            if(idx > -1) { page = Math.floor(idx/50) + 1; render(); }
+            const target = getQ().find(q => String(q.id) === id);
+            if(target) {
+                document.getElementById('course-select').value = target.course;
+                changeFilter();
+                setTimeout(() => {
+                    const el = Array.from(document.querySelectorAll('.quiz-card')).find(c => c.innerHTML.includes('No.'+id));
+                    if(el) el.scrollIntoView({ behavior: 'smooth' });
+                }, 200);
+            }
         }
-
-window.onload = () => {
+        window.onload = () => {
             const data = getQ();
-            
-            // 這裡只改動了這一段：將選單文字加上「(X題)」
             let html = `<option value="all">全部(${data.length}題)</option>`;
-            [...new Set(data.map(q => q.course))].forEach(c => {
+            [...new Set(data.map(q=>q.course))].forEach(c => {
                 const count = data.filter(q => q.course === c).length;
                 html += `<option value="${c}">${c} (${count}題)</option>`;
             });
             document.getElementById('course-select').innerHTML = html;
-            
-            // 以下所有功能邏輯完全維持原樣，不做任何更動
             if(localStorage.getItem('last_watched_id')) document.getElementById('resume-btn').style.display = 'block';
             changeFilter();
         };
