@@ -2,51 +2,92 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>行動題庫</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>行動線上題庫</title>
     <style>
-        .quiz-card { border: 1px solid #ccc; padding: 10px; margin: 5px; cursor: pointer; }
-        .is-correct { background-color: #e6fffa; }
-        .hidden-ans .is-correct { background-color: transparent; }
+        * { box-sizing: border-box; font-family: sans-serif; }
+        body { margin: 0; background-color: #f7fafc; padding: 10px; }
+        .top-panel { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 10px; }
+        select, button, input { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #cbd5e0; margin-bottom: 8px; font-weight: bold; }
+        .row { display: flex; gap: 8px; }
+        .btn-main { background: #2b6cb0; color: white; border: none; cursor: pointer; flex: 1; }
+        .btn-resume { background: #dd6b20; color: white; border: none; cursor: pointer; flex: 1; display: none; }
+        .btn-toggle { background: #4a5568; color: white; border: none; cursor: pointer; flex: 1; }
+        .quiz-card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #e2e8f0; cursor: pointer; }
+        .show-ans .is-correct { background-color: #e6fffa; }
+        .option-line { padding: 4px; }
     </style>
 </head>
 <body>
-    <select id="course-select" onchange="changeFilter()"></select>
-    <button id="resume-btn" style="display:none;" onclick="loadSaved()">↩️ 續讀上次</button>
-    <button onclick="toggleAll()">👁️ 顯/隱全部</button>
+    <div class="top-panel">
+        <select id="course-select" onchange="changeFilter()"></select>
+        <div class="row">
+            <input type="number" id="search-input" placeholder="題號">
+            <button class="btn-main" onclick="jumpToId()">直跳該題</button>
+        </div>
+        <div class="row">
+            <button id="resume-btn" class="btn-resume" onclick="loadSaved()">↩️ 續讀上次</button>
+            <button class="btn-toggle" onclick="toggleAll()">👁️ 顯/隱全部</button>
+        </div>
+    </div>
     <div id="list"></div>
+
     <script src="questions.js" charset="UTF-8"></script>
     <script>
-        let filtered = [], page = 1;
-        function getQ() { return allQuestions.filter(q => q.id && q.id !== "題號"); }
-        function render() {
-            const list = document.getElementById('list');
-            list.innerHTML = filtered.slice((page-1)*50, page*50).map(q => `
-                <div class="quiz-card" onclick="save(this, '${q.id}')">
-                    <b>No.${q.id} ${q.title}</b>
-                    <div class="is-correct">A. ${q.a}</div><div class="is-correct">B. ${q.b}</div>
-                    <div class="is-correct">C. ${q.c}</div><div class="is-correct">D. ${q.d}</div>
+        function getQ() { return allQuestions.filter(q => q.id && q.id !== "題號" && q.id !== "序號"); }
+
+        function render(data) {
+            document.getElementById('list').innerHTML = data.map(q => `
+                <div class="quiz-card" onclick="saveAndShow(this, '${q.id}')">
+                    <div style="font-weight:bold; margin-bottom:8px;">No.${q.id} ${q.title}</div>
+                    <div class="option-line ${q.ans==='A' ? 'is-correct' : ''}">A. ${q.a}</div>
+                    <div class="option-line ${q.ans==='B' ? 'is-correct' : ''}">B. ${q.b}</div>
+                    <div class="option-line ${q.ans==='C' ? 'is-correct' : ''}">C. ${q.c}</div>
+                    <div class="option-line ${q.ans==='D' ? 'is-correct' : ''}">D. ${q.d}</div>
                 </div>
             `).join('');
         }
-        function save(el, id) { el.classList.toggle('hidden-ans'); localStorage.setItem('last_id', id); }
-        function changeFilter() { 
+
+        function saveAndShow(el, id) { el.classList.toggle('show-ans'); localStorage.setItem('last_watched_id', id); }
+        
+        function changeFilter() {
             const val = document.getElementById('course-select').value;
-            filtered = (val === 'all') ? getQ() : getQ().filter(q => q.course === val);
-            render(); 
+            render((val === 'all') ? getQ() : getQ().filter(q => q.course === val));
         }
+
+        function toggleAll() { document.querySelectorAll('.quiz-card').forEach(c => c.classList.toggle('show-ans')); }
+
         function loadSaved() {
-            const id = localStorage.getItem('last_id');
-            const q = getQ().find(i => i.id == id);
-            if(q) { document.getElementById('course-select').value = q.course; changeFilter(); }
+            const lastId = localStorage.getItem('last_watched_id');
+            const target = getQ().find(q => String(q.id) === lastId);
+            if(target) {
+                document.getElementById('course-select').value = target.course;
+                changeFilter();
+                setTimeout(() => {
+                    const el = Array.from(document.querySelectorAll('.quiz-card')).find(c => c.innerHTML.includes('No.'+lastId));
+                    if(el) el.scrollIntoView({ behavior: 'smooth' });
+                }, 200);
+            }
         }
+
+        function jumpToId() {
+            const id = document.getElementById('search-input').value.trim();
+            const target = getQ().find(q => String(q.id) === id);
+            if(target) {
+                document.getElementById('course-select').value = target.course;
+                changeFilter();
+                const el = Array.from(document.querySelectorAll('.quiz-card')).find(c => c.innerHTML.includes('No.'+id));
+                if(el) el.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
         window.onload = () => {
             const data = getQ();
-            const courses = [...new Set(data.map(q => q.course))];
             let html = `<option value="all">全部(${data.length}題)</option>`;
-            courses.forEach(c => html += `<option value="${c}">${c}(${data.filter(q=>q.course===c).length}題)</option>`);
+            [...new Set(data.map(q=>q.course))].forEach(c => html += `<option value="${c}">${c}</option>`);
             document.getElementById('course-select').innerHTML = html;
-            if(localStorage.getItem('last_id')) document.getElementById('resume-btn').style.display = 'inline';
-            changeFilter();
+            if(localStorage.getItem('last_watched_id')) document.getElementById('resume-btn').style.display = 'block';
+            render(data);
         };
     </script>
 </body>
