@@ -5,22 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>行動線上題庫</title>
     <style>
+        :root { --primary: #2b6cb0; --success-bg: #e6fffa; --success-border: #319795; --success-text: #234e52; --bg: #f7fafc; }
         * { box-sizing: border-box; font-family: sans-serif; }
-        body { margin: 0; background-color: #f7fafc; padding: 10px; }
-        .top-panel { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 10px; }
-        select, button, input { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #cbd5e0; margin-bottom: 8px; font-weight: bold; }
-        .row { display: flex; gap: 8px; }
-        .btn-main { background: #2b6cb0; color: white; border: none; cursor: pointer; flex: 1; }
-        .btn-resume { background: #dd6b20; color: white; border: none; cursor: pointer; flex: 1; display: none; }
+        body { margin: 0; background-color: var(--bg); display: flex; flex-direction: column; height: 100vh; }
+        .top-panel { background: white; padding: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); z-index: 1000; flex-shrink: 0; max-width: 600px; margin: 0 auto; width: 100%; }
+        .container { flex: 1; overflow-y: auto; max-width: 600px; margin: 0 auto; padding: 10px; width: 100%; }
+        .row { display: flex; gap: 8px; margin-bottom: 8px; }
+        select, button, input { padding: 10px; border-radius: 6px; border: 1px solid #cbd5e0; font-size: 0.95rem; font-weight: bold; }
+        select { flex: 1; }
+        .btn-main { background: var(--primary); color: white; border: none; cursor: pointer; flex: 1; }
         .btn-toggle { background: #4a5568; color: white; border: none; cursor: pointer; flex: 1; }
-        .quiz-card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #e2e8f0; cursor: pointer; }
-        .show-ans .is-correct { background-color: #e6fffa; }
+        .btn-resume { background: #dd6b20; color: white; border: none; cursor: pointer; flex: 1; display: none; }
+        .quiz-card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; border-left: 4px solid #cbd5e0; cursor: pointer; }
+        .show-ans .is-correct { background-color: var(--success-bg) !important; color: var(--success-text) !important; border-left: 3px solid var(--success-border); }
         .option-line { padding: 4px; }
     </style>
 </head>
 <body>
     <div class="top-panel">
-        <select id="course-select" onchange="changeFilter()"></select>
+        <div class="row"><select id="course-select" onchange="changeFilter()"></select></div>
         <div class="row">
             <input type="number" id="search-input" placeholder="題號">
             <button class="btn-main" onclick="jumpToId()">直跳該題</button>
@@ -30,14 +33,22 @@
             <button class="btn-toggle" onclick="toggleAll()">👁️ 顯/隱全部</button>
         </div>
     </div>
-    <div id="list"></div>
-
-    <script src="questions.js" charset="UTF-8"></script>
+    <div class="container" id="scroll-cont">
+        <div id="list"></div>
+        <div style="display:flex; justify-content:space-between; margin-top:10px;">
+            <button onclick="changePage(-1)">上一頁</button>
+            <div id="page-info">第 1 頁</div>
+            <button onclick="changePage(1)">下一頁</button>
+        </div>
+    </div>
+    <script src="questions.js"></script>
     <script>
-        function getQ() { return allQuestions.filter(q => q.id && q.id !== "題號" && q.id !== "序號"); }
+        let filtered = [], page = 1;
+        function getQ() { return allQuestions.filter(q => q.id !== "序號" && q.id !== "題號" && q.id); }
 
-        function render(data) {
-            document.getElementById('list').innerHTML = data.map(q => `
+        function render() {
+            const list = document.getElementById('list');
+            list.innerHTML = filtered.slice((page - 1) * 50, page * 50).map(q => `
                 <div class="quiz-card" onclick="saveAndShow(this, '${q.id}')">
                     <div style="font-weight:bold; margin-bottom:8px;">No.${q.id} ${q.title}</div>
                     <div class="option-line ${q.ans==='A' ? 'is-correct' : ''}">A. ${q.a}</div>
@@ -46,39 +57,51 @@
                     <div class="option-line ${q.ans==='D' ? 'is-correct' : ''}">D. ${q.d}</div>
                 </div>
             `).join('');
+            document.getElementById('page-info').textContent = `第 ${page} 頁`;
         }
 
-        function saveAndShow(el, id) { el.classList.toggle('show-ans'); localStorage.setItem('last_watched_id', id); }
-        
+        function saveAndShow(el, id) {
+            el.classList.toggle('show-ans');
+            localStorage.setItem('last_watched_id', id);
+        }
+
         function changeFilter() {
             const val = document.getElementById('course-select').value;
-            render((val === 'all') ? getQ() : getQ().filter(q => q.course === val));
+            filtered = (val === 'all') ? getQ() : getQ().filter(q => q.course === val);
+            page = 1; render();
         }
 
-        function toggleAll() { document.querySelectorAll('.quiz-card').forEach(c => c.classList.toggle('show-ans')); }
+        function toggleAll() {
+            document.querySelectorAll('.quiz-card').forEach(c => c.classList.toggle('show-ans'));
+        }
+
+        function changePage(d) {
+            page = Math.max(1, Math.min(page + d, Math.ceil(filtered.length/50) || 1)); 
+            render();
+        }
 
         function loadSaved() {
             const lastId = localStorage.getItem('last_watched_id');
-            const target = getQ().find(q => String(q.id) === lastId);
-            if(target) {
+            const data = getQ();
+            const idx = data.findIndex(q => String(q.id) === lastId);
+            if(idx > -1) {
+                const target = data[idx];
+                // 1. 強制切換到該題所屬分類
                 document.getElementById('course-select').value = target.course;
-                changeFilter();
-                setTimeout(() => {
-                    const el = Array.from(document.querySelectorAll('.quiz-card')).find(c => c.innerHTML.includes('No.'+lastId));
-                    if(el) el.scrollIntoView({ behavior: 'smooth' });
-                }, 200);
+                // 2. 依照分類重新篩選，但計算頁數時針對全部題目
+                filtered = getQ().filter(q => q.course === target.course);
+                page = Math.floor(data.findIndex(q => q.id === lastId) / 50) + 1; // 修正：這行確保頁數正確
+                // 更正：續讀應顯示該題所在課程的頁面
+                const courseIdx = filtered.findIndex(q => q.id === lastId);
+                page = Math.floor(courseIdx / 50) + 1;
+                render();
             }
         }
 
         function jumpToId() {
             const id = document.getElementById('search-input').value.trim();
-            const target = getQ().find(q => String(q.id) === id);
-            if(target) {
-                document.getElementById('course-select').value = target.course;
-                changeFilter();
-                const el = Array.from(document.querySelectorAll('.quiz-card')).find(c => c.innerHTML.includes('No.'+id));
-                if(el) el.scrollIntoView({ behavior: 'smooth' });
-            }
+            const idx = filtered.findIndex(q => String(q.id) === id);
+            if(idx > -1) { page = Math.floor(idx/50) + 1; render(); }
         }
 
         window.onload = () => {
@@ -87,7 +110,7 @@
             [...new Set(data.map(q=>q.course))].forEach(c => html += `<option value="${c}">${c}</option>`);
             document.getElementById('course-select').innerHTML = html;
             if(localStorage.getItem('last_watched_id')) document.getElementById('resume-btn').style.display = 'block';
-            render(data);
+            changeFilter();
         };
     </script>
 </body>
