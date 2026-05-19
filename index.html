@@ -104,11 +104,18 @@
             if(idx > -1) { page = Math.floor(idx/50) + 1; render(); }
         }
 
-        window.onload = () => {
+window.onload = () => {
             const data = getQ();
+            
+            // 這裡只改動了這一段：將選單文字加上「(X題)」
             let html = `<option value="all">全部(${data.length}題)</option>`;
-            [...new Set(data.map(q=>q.course))].forEach(c => html += `<option value="${c}">${c}</option>`);
+            [...new Set(data.map(q => q.course))].forEach(c => {
+                const count = data.filter(q => q.course === c).length;
+                html += `<option value="${c}">${c} (${count}題)</option>`;
+            });
             document.getElementById('course-select').innerHTML = html;
+            
+            // 以下所有功能邏輯完全維持原樣，不做任何更動
             if(localStorage.getItem('last_watched_id')) document.getElementById('resume-btn').style.display = 'block';
             changeFilter();
         };
